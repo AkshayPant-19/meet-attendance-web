@@ -6,6 +6,25 @@ import type { SyncPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+// The Chrome extension calls this endpoint from a meeting page (e.g.
+// https://meet.google.com), i.e. cross-origin, so it must send CORS headers.
+// Auth is via a bearer token, so a wildcard origin is safe (the token is the
+// secret, and responses are never sent with credentials).
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Max-Age": "86400",
+};
+
+function json(body: unknown, status: number) {
+  return NextResponse.json(body, { status, headers: CORS_HEADERS });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 /**
  * Extension sync endpoint.
  *
@@ -29,7 +48,7 @@ export async function POST(request: Request) {
   const auth = request.headers.get("authorization") || "";
   const match = /^Bearer\s+(.+)$/i.exec(auth.trim());
   if (!match) {
-    return NextResponse.json({ error: "missing bearer token" }, { status: 401 });
+    return json({ error: "missing bearer token" }, 401);
   }
   const tokenHash = hashToken(match[1].trim());
 
@@ -37,7 +56,7 @@ export async function POST(request: Request) {
   try {
     admin = createAdminClient();
   } catch {
-    return NextResponse.json({ error: "server not configured" }, { status: 500 });
+    return json({ error: "server not configured" }, 500);
   }
 
   const { data: tokenRow, error: tokenError } = await admin
@@ -47,17 +66,17 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (tokenError || !tokenRow) {
-    return NextResponse.json({ error: "invalid token" }, { status: 401 });
+    return json({ error: "invalid token" }, 401);
   }
 
   const payload = (await request.json().catch(() => null)) as SyncPayload | null;
   if (!payload || (!payload.students?.length && !payload.records)) {
-    return NextResponse.json({ error: "empty payload" }, { status: 400 });
+    return json({ error: "empty payload" }, 400);
   }
 
   const result = await createSessionFromPayload(admin, tokenRow.user_id, payload);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    return json({ error: result.error }, 400);
   }
 
   await admin
@@ -65,5 +84,5 @@ export async function POST(request: Request) {
     .update({ last_used_at: new Date().toISOString() })
     .eq("id", tokenRow.id);
 
-  return NextResponse.json(result, { status: 201 });
+  return json(result, 201);
 }
