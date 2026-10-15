@@ -89,6 +89,23 @@ curl -X POST https://<your-app>.vercel.app/api/sync \
 Missing students default to **absent**. `join`/`leave` accept epoch-ms,
 ISO strings, or `HH:MM:SS`.
 
+Include a stable `"clientKey"` (any unique string per meeting) and the call
+**updates the same session** instead of creating a new one — this is how the
+extension auto-syncs every 5 minutes without duplicate rows. Optionally echo back
+the `"sessionId"` from a previous response for the same effect:
+
+```jsonc
+{
+  "clientKey": "b6f1a2c4-…",
+  "sessionId": "…",          // optional, from a prior sync
+  "students": ["…"],
+  "records": { "…": { "join": 1729000000000, "status": "present" } }
+}
+```
+
+> Existing installs: the `client_key` column is added by re-running
+> `supabase/schema.sql` (it uses `alter table … add column if not exists`).
+
 ## API reference
 
 | Method & path | Auth | Purpose |

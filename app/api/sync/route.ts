@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createSessionFromPayload } from "@/lib/sessions";
+import { upsertSessionFromPayload } from "@/lib/sessions";
 import { hashToken } from "@/lib/tokens";
 import type { SyncPayload } from "@/lib/types";
 
@@ -37,12 +37,17 @@ export async function OPTIONS() {
  *     "title": "Period 3 — Algebra",
  *     "platform": "meet",
  *     "meetingCode": "abc-defg-hij",
+ *     "clientKey": "b6f1…",           // stable per meeting; repeated syncs update ONE session
+ *     "sessionId": "…",               // optional, returned by a previous sync
  *     "students": ["SHAURYA SINGH", "TANISHK BHATT"],
  *     "records": {
  *       "SHAURYA SINGH": { "join": 1729000000000, "leave": 1729003600000, "status": "present" },
  *       "TANISHK BHATT": { "status": "absent" }
  *     }
  *   }
+ *
+ * Passing the same clientKey (or sessionId) updates the existing session, so
+ * the extension can auto-sync every few minutes without creating duplicates.
  */
 export async function POST(request: Request) {
   const auth = request.headers.get("authorization") || "";
@@ -74,7 +79,7 @@ export async function POST(request: Request) {
     return json({ error: "empty payload" }, 400);
   }
 
-  const result = await createSessionFromPayload(admin, tokenRow.user_id, payload);
+  const result = await upsertSessionFromPayload(admin, tokenRow.user_id, payload);
   if (!result.ok) {
     return json({ error: result.error }, 400);
   }

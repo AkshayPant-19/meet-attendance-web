@@ -16,6 +16,7 @@ create index if not exists students_user_id_idx on public.students (user_id);
 create table if not exists public.sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
+  client_key text,
   title text not null default 'Untitled session',
   platform text,
   meeting_code text,
@@ -26,6 +27,12 @@ create table if not exists public.sessions (
   created_at timestamptz not null default now()
 );
 create index if not exists sessions_user_id_idx on public.sessions (user_id);
+
+-- client_key lets the extension update ONE session across repeated syncs
+-- (create-or-update). Safe to run on an existing install.
+alter table public.sessions add column if not exists client_key text;
+create unique index if not exists sessions_user_client_key_idx
+  on public.sessions (user_id, client_key);
 
 -- ---------- attendance_records ----------
 create table if not exists public.attendance_records (
